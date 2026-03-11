@@ -14,7 +14,7 @@
 
 **[▶ Open Live Demo](https://coutLiKe.github.io/passguard)**
 
-Or download and open `index.html` directly in any browser — no install, no server needed.
+  No install, no server needed.
 
 ---
 
