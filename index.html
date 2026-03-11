@@ -1,0 +1,872 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PassGuard — Password Security Analyzer</title>
+  <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Sora:wght@300;400;600;700&display=swap" rel="stylesheet" />
+  <style>
+    /* ── Reset & Variables ─────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #07090f;
+      --surface:   #0e1117;
+      --surface2:  #151b27;
+      --border:    #1e2a3a;
+      --accent:    #00e5ff;
+      --accent2:   #00ff9d;
+      --warn:      #ffb300;
+      --danger:    #ff3d57;
+      --text:      #cdd9e8;
+      --muted:     #4a6080;
+      --mono:      'Share Tech Mono', monospace;
+      --sans:      'Sora', sans-serif;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--sans);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* ── Animated grid background ──────────────────────── */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image:
+        linear-gradient(var(--border) 1px, transparent 1px),
+        linear-gradient(90deg, var(--border) 1px, transparent 1px);
+      background-size: 40px 40px;
+      opacity: 0.35;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* Scanning beam */
+    body::after {
+      content: '';
+      position: fixed;
+      top: -100%;
+      left: 0; right: 0;
+      height: 2px;
+      background: linear-gradient(90deg, transparent, var(--accent), transparent);
+      animation: scan 6s linear infinite;
+      pointer-events: none;
+      z-index: 1;
+    }
+    @keyframes scan { to { top: 200%; } }
+
+    /* ── Layout ────────────────────────────────────────── */
+    .wrap {
+      position: relative;
+      z-index: 2;
+      max-width: 860px;
+      margin: 0 auto;
+      padding: 48px 24px 80px;
+    }
+
+    /* ── Header ────────────────────────────────────────── */
+    header {
+      text-align: center;
+      margin-bottom: 52px;
+      animation: fadeDown 0.7s ease both;
+    }
+    @keyframes fadeDown {
+      from { opacity: 0; transform: translateY(-20px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .logo-tag {
+      display: inline-block;
+      font-family: var(--mono);
+      font-size: 11px;
+      letter-spacing: 4px;
+      color: var(--accent);
+      border: 1px solid var(--accent);
+      padding: 4px 12px;
+      border-radius: 2px;
+      margin-bottom: 20px;
+      text-transform: uppercase;
+    }
+
+    h1 {
+      font-size: clamp(2rem, 6vw, 3.4rem);
+      font-weight: 700;
+      line-height: 1.1;
+      letter-spacing: -1px;
+      color: #fff;
+    }
+    h1 span { color: var(--accent); }
+
+    .subtitle {
+      margin-top: 12px;
+      color: var(--muted);
+      font-size: 0.95rem;
+      font-weight: 300;
+    }
+
+    /* ── Card ──────────────────────────────────────────── */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 28px 28px;
+      margin-bottom: 20px;
+      animation: fadeUp 0.6s ease both;
+    }
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(16px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .card:nth-child(2) { animation-delay: 0.1s; }
+    .card:nth-child(3) { animation-delay: 0.2s; }
+    .card:nth-child(4) { animation-delay: 0.3s; }
+
+    .card-title {
+      font-family: var(--mono);
+      font-size: 11px;
+      letter-spacing: 3px;
+      color: var(--muted);
+      text-transform: uppercase;
+      margin-bottom: 18px;
+    }
+
+    /* ── Input area ────────────────────────────────────── */
+    .input-wrap {
+      position: relative;
+    }
+
+    #password-input {
+      width: 100%;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px 52px 16px 18px;
+      font-family: var(--mono);
+      font-size: 1.1rem;
+      color: #fff;
+      letter-spacing: 2px;
+      outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    #password-input:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(0,229,255,0.08);
+    }
+    #password-input::placeholder {
+      color: var(--muted);
+      letter-spacing: 1px;
+    }
+
+    /* Toggle visibility button */
+    #toggle-vis {
+      position: absolute;
+      right: 14px;
+      top: 50%;
+      transform: translateY(-50%);
+      background: none;
+      border: none;
+      cursor: pointer;
+      color: var(--muted);
+      font-size: 18px;
+      transition: color 0.2s;
+      padding: 4px;
+    }
+    #toggle-vis:hover { color: var(--accent); }
+
+    /* ── Strength bar ──────────────────────────────────── */
+    .strength-row {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      margin-top: 16px;
+    }
+
+    .bar-track {
+      flex: 1;
+      height: 6px;
+      background: var(--surface2);
+      border-radius: 99px;
+      overflow: hidden;
+    }
+    .bar-fill {
+      height: 100%;
+      border-radius: 99px;
+      width: 0%;
+      transition: width 0.5s cubic-bezier(0.4,0,0.2,1), background 0.4s;
+      background: var(--muted);
+    }
+
+    .strength-label {
+      font-family: var(--mono);
+      font-size: 12px;
+      letter-spacing: 2px;
+      min-width: 80px;
+      text-align: right;
+      text-transform: uppercase;
+      color: var(--muted);
+      transition: color 0.3s;
+    }
+
+    /* ── Score grid ────────────────────────────────────── */
+    .score-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 14px;
+      margin-top: 4px;
+    }
+    @media (min-width: 560px) {
+      .score-grid { grid-template-columns: repeat(4, 1fr); }
+    }
+
+    .score-item {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 14px 12px;
+      text-align: center;
+      transition: border-color 0.3s;
+    }
+    .score-item.active { border-color: var(--accent2); }
+
+    .score-val {
+      font-family: var(--mono);
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: var(--muted);
+      transition: color 0.3s;
+      line-height: 1;
+    }
+    .score-item.active .score-val { color: var(--accent2); }
+
+    .score-lbl {
+      font-size: 10px;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-top: 5px;
+    }
+
+    /* ── Entropy display ───────────────────────────────── */
+    .entropy-row {
+      display: flex;
+      align-items: baseline;
+      gap: 10px;
+      margin-top: 4px;
+    }
+    .entropy-val {
+      font-family: var(--mono);
+      font-size: 2.8rem;
+      font-weight: 700;
+      color: var(--muted);
+      transition: color 0.4s;
+      line-height: 1;
+    }
+    .entropy-unit {
+      font-family: var(--mono);
+      font-size: 14px;
+      color: var(--muted);
+    }
+    .entropy-desc {
+      margin-top: 8px;
+      font-size: 0.82rem;
+      color: var(--muted);
+      line-height: 1.6;
+    }
+
+    /* ── Crack time ────────────────────────────────────── */
+    .crack-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-top: 4px;
+    }
+
+    .crack-item {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px 14px;
+    }
+    .crack-scenario {
+      font-size: 10px;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 4px;
+    }
+    .crack-time {
+      font-family: var(--mono);
+      font-size: 0.95rem;
+      color: var(--text);
+      transition: color 0.3s;
+    }
+
+    /* ── Checklist ─────────────────────────────────────── */
+    .checklist {
+      display: grid;
+      gap: 10px;
+      margin-top: 4px;
+    }
+
+    .check-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-size: 0.88rem;
+      color: var(--muted);
+      transition: color 0.3s;
+    }
+    .check-item.pass { color: var(--text); }
+
+    .check-dot {
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      border: 2px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      flex-shrink: 0;
+      transition: background 0.3s, border-color 0.3s;
+      color: transparent;
+    }
+    .check-item.pass .check-dot {
+      background: var(--accent2);
+      border-color: var(--accent2);
+      color: #000;
+    }
+    .check-item.fail .check-dot {
+      background: transparent;
+      border-color: var(--danger);
+    }
+
+    /* ── Warnings ──────────────────────────────────────── */
+    .warnings { margin-top: 4px; display: grid; gap: 8px; }
+
+    .warn-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      padding: 10px 14px;
+      border-radius: 6px;
+      font-size: 0.84rem;
+      line-height: 1.5;
+      border-left: 3px solid transparent;
+    }
+    .warn-item.danger {
+      background: rgba(255,61,87,0.07);
+      border-color: var(--danger);
+      color: #ff7b8a;
+    }
+    .warn-item.caution {
+      background: rgba(255,179,0,0.07);
+      border-color: var(--warn);
+      color: #ffc84d;
+    }
+    .warn-item.ok {
+      background: rgba(0,255,157,0.06);
+      border-color: var(--accent2);
+      color: #80ffcc;
+    }
+    .warn-icon { font-size: 16px; margin-top: 1px; flex-shrink: 0; }
+
+    /* ── Two-col layout ────────────────────────────────── */
+    .two-col {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 20px;
+    }
+    @media (min-width: 620px) {
+      .two-col { grid-template-columns: 1fr 1fr; }
+    }
+
+    /* ── Tips section ──────────────────────────────────── */
+    .tip-list { display: grid; gap: 8px; margin-top: 4px; }
+    .tip {
+      display: flex;
+      gap: 10px;
+      font-size: 0.84rem;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+    .tip-num {
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--accent);
+      padding-top: 1px;
+      flex-shrink: 0;
+    }
+
+    /* ── Footer ────────────────────────────────────────── */
+    footer {
+      text-align: center;
+      margin-top: 48px;
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--muted);
+      letter-spacing: 1px;
+    }
+    footer a { color: var(--accent); text-decoration: none; }
+    footer a:hover { text-decoration: underline; }
+
+    /* ── Glow effects on high strength ────────────────── */
+    .glowing { box-shadow: 0 0 24px rgba(0,229,255,0.1); }
+  </style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- Header -->
+  <header>
+    <div class="logo-tag">PassGuard v1.0</div>
+    <h1>Password <span>Security</span> Analyzer</h1>
+    <p class="subtitle">Real-time entropy analysis · Crack-time estimation · Security audit</p>
+  </header>
+
+  <!-- Input card -->
+  <div class="card" id="input-card">
+    <div class="card-title">// Enter a password to analyze</div>
+    <div class="input-wrap">
+      <input
+        type="password"
+        id="password-input"
+        placeholder="type your password here..."
+        autocomplete="off"
+        spellcheck="false"
+      />
+      <button id="toggle-vis" title="Toggle visibility">👁</button>
+    </div>
+    <div class="strength-row">
+      <div class="bar-track"><div class="bar-fill" id="strength-bar"></div></div>
+      <div class="strength-label" id="strength-label">—</div>
+    </div>
+  </div>
+
+  <!-- Score metrics -->
+  <div class="card" style="animation-delay:0.08s">
+    <div class="card-title">// Character composition</div>
+    <div class="score-grid">
+      <div class="score-item" id="sc-length">
+        <div class="score-val" id="val-length">0</div>
+        <div class="score-lbl">Length</div>
+      </div>
+      <div class="score-item" id="sc-upper">
+        <div class="score-val" id="val-upper">0</div>
+        <div class="score-lbl">Uppercase</div>
+      </div>
+      <div class="score-item" id="sc-digit">
+        <div class="score-val" id="val-digit">0</div>
+        <div class="score-lbl">Digits</div>
+      </div>
+      <div class="score-item" id="sc-symbol">
+        <div class="score-val" id="val-symbol">0</div>
+        <div class="score-lbl">Symbols</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Entropy + Crack time -->
+  <div class="two-col">
+
+    <!-- Entropy -->
+    <div class="card" style="animation-delay:0.15s">
+      <div class="card-title">// Entropy (bits)</div>
+      <div class="entropy-row">
+        <div class="entropy-val" id="entropy-val">0</div>
+        <div class="entropy-unit">bits</div>
+      </div>
+      <p class="entropy-desc" id="entropy-desc">
+        Enter a password above to calculate its entropy — a measure of unpredictability.
+        Higher entropy = harder to crack.
+      </p>
+    </div>
+
+    <!-- Crack time -->
+    <div class="card" style="animation-delay:0.2s">
+      <div class="card-title">// Estimated crack time</div>
+      <div class="crack-grid">
+        <div class="crack-item">
+          <div class="crack-scenario">Online attack</div>
+          <div class="crack-time" id="crack-online">—</div>
+        </div>
+        <div class="crack-item">
+          <div class="crack-scenario">Offline (slow)</div>
+          <div class="crack-time" id="crack-offline-slow">—</div>
+        </div>
+        <div class="crack-item">
+          <div class="crack-scenario">Offline (fast)</div>
+          <div class="crack-time" id="crack-offline-fast">—</div>
+        </div>
+        <div class="crack-item">
+          <div class="crack-scenario">GPU cluster</div>
+          <div class="crack-time" id="crack-gpu">—</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Requirements checklist + Warnings -->
+  <div class="two-col">
+
+    <div class="card" style="animation-delay:0.25s">
+      <div class="card-title">// Security requirements</div>
+      <div class="checklist" id="checklist">
+        <div class="check-item" id="chk-length">
+          <div class="check-dot">✓</div>
+          <span>At least 12 characters</span>
+        </div>
+        <div class="check-item" id="chk-upper">
+          <div class="check-dot">✓</div>
+          <span>Contains uppercase letter</span>
+        </div>
+        <div class="check-item" id="chk-lower">
+          <div class="check-dot">✓</div>
+          <span>Contains lowercase letter</span>
+        </div>
+        <div class="check-item" id="chk-digit">
+          <div class="check-dot">✓</div>
+          <span>Contains a number</span>
+        </div>
+        <div class="check-item" id="chk-symbol">
+          <div class="check-dot">✓</div>
+          <span>Contains a symbol (!@#$...)</span>
+        </div>
+        <div class="check-item" id="chk-norepeat">
+          <div class="check-dot">✓</div>
+          <span>No repeated characters (aaa)</span>
+        </div>
+        <div class="check-item" id="chk-nosequence">
+          <div class="check-dot">✓</div>
+          <span>No keyboard sequences (abc, 123)</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="animation-delay:0.3s">
+      <div class="card-title">// Security warnings</div>
+      <div class="warnings" id="warnings">
+        <div class="warn-item ok">
+          <span class="warn-icon">🛡</span>
+          <span>Enter a password to see security warnings and alerts.</span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Tips -->
+  <div class="card" style="animation-delay:0.35s">
+    <div class="card-title">// Tips for strong passwords</div>
+    <div class="tip-list">
+      <div class="tip"><span class="tip-num">01.</span><span>Use a <strong>passphrase</strong> — a string of 4–5 random words is both memorable and highly secure. Example: <em>correct-horse-battery-staple</em></span></div>
+      <div class="tip"><span class="tip-num">02.</span><span>Never reuse passwords across sites. A breach on one service should never expose another.</span></div>
+      <div class="tip"><span class="tip-num">03.</span><span>Use a <strong>password manager</strong> (Bitwarden, 1Password, KeePass) to generate and store truly random passwords.</span></div>
+      <div class="tip"><span class="tip-num">04.</span><span>Enable <strong>multi-factor authentication (MFA)</strong> wherever possible — even a weak password is protected with MFA active.</span></div>
+      <div class="tip"><span class="tip-num">05.</span><span>Aim for 16+ character passwords. Length contributes more to entropy than complexity alone.</span></div>
+    </div>
+  </div>
+
+  <footer>
+    <p>PassGuard &mdash; built for educational &amp; cybersecurity portfolio purposes &mdash;
+      <a href="https://github.com/yourusername/passguard" target="_blank">GitHub ↗</a>
+    </p>
+    <p style="margin-top:6px;opacity:0.5">No passwords are transmitted or stored. All analysis runs locally in your browser.</p>
+  </footer>
+
+</div>
+
+<script>
+/* ================================================================
+   PassGuard — Password Security Analyzer
+   All logic runs entirely in the browser. No data is ever sent
+   to any server. This is purely client-side JavaScript.
+   ================================================================ */
+
+// ── Common/weak passwords list (small sample for demo) ────────────
+const COMMON_PASSWORDS = new Set([
+  "password","password1","123456","12345678","qwerty","abc123",
+  "letmein","monkey","dragon","iloveyou","admin","welcome",
+  "login","master","hello","shadow","sunshine","princess","football",
+  "superman","batman","trustno1","pass123","passw0rd","p@ssword",
+  "123456789","1234567890","qwerty123","1q2w3e4r","password123",
+  "Password1","Password123","Passw0rd","Admin123","Welcome1",
+]);
+
+// ── Keyboard sequences to detect ─────────────────────────────────
+const SEQUENCES = [
+  "abcdefghijklmnopqrstuvwxyz",
+  "zyxwvutsrqponmlkjihgfedcba",
+  "qwertyuiopasdfghjklzxcvbnm",
+  "0123456789","9876543210",
+];
+
+// ── DOM references ─────────────────────────────────────────────────
+const input       = document.getElementById('password-input');
+const toggleBtn   = document.getElementById('toggle-vis');
+const bar         = document.getElementById('strength-bar');
+const label       = document.getElementById('strength-label');
+const entropyEl   = document.getElementById('entropy-val');
+const entropyDesc = document.getElementById('entropy-desc');
+const warnBox     = document.getElementById('warnings');
+
+// Crack time elements
+const crackOnline      = document.getElementById('crack-online');
+const crackOfflineSlow = document.getElementById('crack-offline-slow');
+const crackOfflineFast = document.getElementById('crack-offline-fast');
+const crackGpu         = document.getElementById('crack-gpu');
+
+// ── Toggle password visibility ─────────────────────────────────────
+let visible = false;
+toggleBtn.addEventListener('click', () => {
+  visible = !visible;
+  input.type = visible ? 'text' : 'password';
+  toggleBtn.textContent = visible ? '🙈' : '👁';
+});
+
+// ── Main analysis — fires on every keystroke ───────────────────────
+input.addEventListener('input', () => analyze(input.value));
+
+function analyze(pw) {
+  if (!pw) { reset(); return; }
+
+  // ── 1. Character composition ──────────────────────────────────
+  const len     = pw.length;
+  const uppers  = (pw.match(/[A-Z]/g) || []).length;
+  const lowers  = (pw.match(/[a-z]/g) || []).length;
+  const digits  = (pw.match(/[0-9]/g) || []).length;
+  const symbols = (pw.match(/[^A-Za-z0-9]/g) || []).length;
+
+  // Update composition counters
+  setCounter('val-length', len,     'sc-length', len >= 12);
+  setCounter('val-upper',  uppers,  'sc-upper',  uppers > 0);
+  setCounter('val-digit',  digits,  'sc-digit',  digits > 0);
+  setCounter('val-symbol', symbols, 'sc-symbol', symbols > 0);
+
+  // ── 2. Character pool size (for entropy) ──────────────────────
+  let poolSize = 0;
+  if (lowers > 0)  poolSize += 26;
+  if (uppers > 0)  poolSize += 26;
+  if (digits > 0)  poolSize += 10;
+  if (symbols > 0) poolSize += 32;
+
+  // ── 3. Entropy = log2(poolSize^length) = length * log2(poolSize)
+  const entropy = poolSize > 0
+    ? Math.round(len * Math.log2(poolSize))
+    : 0;
+
+  entropyEl.textContent = entropy;
+
+  // Color entropy by quality
+  const eColor = entropy < 28 ? 'var(--danger)'
+               : entropy < 50 ? 'var(--warn)'
+               : entropy < 80 ? 'var(--accent)'
+               : 'var(--accent2)';
+  entropyEl.style.color = eColor;
+
+  entropyDesc.textContent =
+    entropy < 28 ? 'Very weak. This can be brute-forced near-instantly.' :
+    entropy < 50 ? 'Weak. Vulnerable to offline dictionary attacks.' :
+    entropy < 60 ? 'Moderate. Somewhat resistant to casual attacks.' :
+    entropy < 80 ? 'Good entropy. Resistant to most automated attacks.' :
+    entropy < 100 ? 'Strong! Very difficult to crack by brute force.' :
+    'Excellent entropy. Effectively uncrackable by brute force alone.';
+
+  // ── 4. Crack time estimation ───────────────────────────────────
+  // Combinations = poolSize ^ length
+  // Guesses per second for each attack scenario:
+  //   Online (throttled):  100 /sec
+  //   Offline slow hash:   10,000 /sec (bcrypt)
+  //   Offline fast hash:   1,000,000,000 /sec (MD5)
+  //   GPU cluster:         100,000,000,000 /sec
+  const combinations = Math.pow(poolSize || 1, len);
+  crackOnline.textContent      = formatCrackTime(combinations / 100);
+  crackOfflineSlow.textContent = formatCrackTime(combinations / 10_000);
+  crackOfflineFast.textContent = formatCrackTime(combinations / 1_000_000_000);
+  crackGpu.textContent         = formatCrackTime(combinations / 100_000_000_000);
+
+  // ── 5. Security checklist ─────────────────────────────────────
+  const hasRepeat   = /(.)\1\1/.test(pw);           // 3+ same chars in a row
+  const hasSequence = checkSequence(pw.toLowerCase());
+
+  setCheck('chk-length',     len >= 12);
+  setCheck('chk-upper',      uppers > 0);
+  setCheck('chk-lower',      lowers > 0);
+  setCheck('chk-digit',      digits > 0);
+  setCheck('chk-symbol',     symbols > 0);
+  setCheck('chk-norepeat',   !hasRepeat);
+  setCheck('chk-nosequence', !hasSequence);
+
+  // ── 6. Strength score ─────────────────────────────────────────
+  const score = calcStrengthScore(pw, entropy, uppers, lowers, digits, symbols, hasRepeat, hasSequence);
+  updateStrengthBar(score);
+
+  // ── 7. Warnings panel ─────────────────────────────────────────
+  buildWarnings(pw, len, entropy, hasRepeat, hasSequence, digits, symbols);
+}
+
+// ── Calculate a 0–100 strength score ──────────────────────────────
+function calcStrengthScore(pw, entropy, up, lo, di, sy, repeat, seq) {
+  let score = 0;
+
+  // Entropy contribution (max 50 pts)
+  score += Math.min(50, Math.round(entropy * 0.55));
+
+  // Length bonus (max 20 pts)
+  score += Math.min(20, pw.length * 1.4);
+
+  // Character variety bonus (max 20 pts)
+  if (up > 0)  score += 5;
+  if (lo > 0)  score += 5;
+  if (di > 0)  score += 5;
+  if (sy > 0)  score += 5;
+
+  // Penalties
+  if (COMMON_PASSWORDS.has(pw.toLowerCase())) score = Math.min(score, 8);
+  if (repeat)   score -= 10;
+  if (seq)      score -= 8;
+  if (pw.length < 8) score = Math.min(score, 15);
+  // Extra penalty: if more than 60% of chars are the same character, cap harshly
+  const charCounts = {};
+  for (const c of pw) charCounts[c] = (charCounts[c] || 0) + 1;
+  const maxRepeatRatio = Math.max(...Object.values(charCounts)) / pw.length;
+  if (maxRepeatRatio > 0.6) score = Math.min(score, 25);
+
+  return Math.max(0, Math.min(100, score));
+}
+
+// ── Update the visual strength bar ────────────────────────────────
+function updateStrengthBar(score) {
+  bar.style.width = score + '%';
+
+  let color, text;
+  if (score < 20)      { color = 'var(--danger)'; text = 'CRITICAL'; }
+  else if (score < 40) { color = '#ff7c42';       text = 'WEAK'; }
+  else if (score < 60) { color = 'var(--warn)';   text = 'FAIR'; }
+  else if (score < 80) { color = 'var(--accent)'; text = 'GOOD'; }
+  else                 { color = 'var(--accent2)'; text = 'STRONG'; }
+
+  bar.style.background = color;
+  label.style.color    = color;
+  label.textContent    = text;
+
+  // Glow the card on strong passwords
+  document.getElementById('input-card').classList.toggle('glowing', score >= 80);
+}
+
+// ── Build the warnings panel ───────────────────────────────────────
+function buildWarnings(pw, len, entropy, repeat, seq, digits, symbols) {
+  const warnings = [];
+
+  if (COMMON_PASSWORDS.has(pw.toLowerCase())) {
+    warnings.push({ type: 'danger', icon: '🔴', msg: 'This is a known common password. It would be cracked instantly in any dictionary attack.' });
+  }
+  if (len < 8) {
+    warnings.push({ type: 'danger', icon: '🔴', msg: `Password is only ${len} characters. Minimum recommended length is 12.` });
+  }
+  if (repeat) {
+    warnings.push({ type: 'caution', icon: '⚠️', msg: 'Contains repeated characters (e.g. "aaa"). This significantly reduces entropy.' });
+  }
+  if (seq) {
+    warnings.push({ type: 'caution', icon: '⚠️', msg: 'Contains a keyboard or alphabetical sequence (e.g. "abc", "123"). Attackers specifically target these.' });
+  }
+  if (symbols === 0 && len < 16) {
+    warnings.push({ type: 'caution', icon: '⚠️', msg: 'No symbols present. Adding special characters (!@#$) greatly increases the character pool.' });
+  }
+  if (/^\d+$/.test(pw)) {
+    warnings.push({ type: 'danger', icon: '🔴', msg: 'Password contains only numbers. This is extremely weak — a small pool of 10 characters.' });
+  }
+  if (entropy >= 80 && !COMMON_PASSWORDS.has(pw.toLowerCase())) {
+    warnings.push({ type: 'ok', icon: '✅', msg: 'High entropy detected. This password is strong against brute-force attacks.' });
+  }
+  if (warnings.length === 0) {
+    warnings.push({ type: 'ok', icon: '🛡', msg: 'No major issues detected. Keep following best practices.' });
+  }
+
+  warnBox.innerHTML = warnings.map(w =>
+    `<div class="warn-item ${w.type}">
+      <span class="warn-icon">${w.icon}</span>
+      <span>${w.msg}</span>
+    </div>`
+  ).join('');
+}
+
+// ── Check for keyboard/alpha sequences ────────────────────────────
+function checkSequence(pw) {
+  for (const seq of SEQUENCES) {
+    for (let i = 0; i <= seq.length - 3; i++) {
+      if (pw.includes(seq.slice(i, i + 3))) return true;
+    }
+  }
+  return false;
+}
+
+// ── Format seconds into human-readable time ───────────────────────
+function formatCrackTime(seconds) {
+  if (!isFinite(seconds) || seconds > 1e30) return '∞ centuries';
+  if (seconds < 0.001)  return 'instant';
+  if (seconds < 1)      return `${Math.round(seconds * 1000)} ms`;
+  if (seconds < 60)     return `${Math.round(seconds)} sec`;
+  if (seconds < 3600)   return `${Math.round(seconds / 60)} min`;
+  if (seconds < 86400)  return `${Math.round(seconds / 3600)} hours`;
+  if (seconds < 2592000)  return `${Math.round(seconds / 86400)} days`;
+  if (seconds < 31536000) return `${Math.round(seconds / 2592000)} months`;
+  const years = seconds / 31536000;
+  if (years < 1000)     return `${Math.round(years)} years`;
+  if (years < 1e6)      return `${(years / 1000).toFixed(1)}k years`;
+  if (years < 1e9)      return `${(years / 1e6).toFixed(1)}M years`;
+  return '> 1 billion years';
+}
+
+// ── Helper: set a score counter cell ──────────────────────────────
+function setCounter(valId, val, cardId, active) {
+  document.getElementById(valId).textContent = val;
+  document.getElementById(cardId).classList.toggle('active', active);
+}
+
+// ── Helper: set checklist item pass/fail ──────────────────────────
+function setCheck(id, passing) {
+  const el = document.getElementById(id);
+  el.classList.toggle('pass', passing);
+  el.classList.toggle('fail', !passing);
+  el.querySelector('.check-dot').textContent = passing ? '✓' : '';
+}
+
+// ── Reset all UI to empty state ────────────────────────────────────
+function reset() {
+  bar.style.width = '0%';
+  bar.style.background = 'var(--muted)';
+  label.textContent = '—';
+  label.style.color = 'var(--muted)';
+  entropyEl.textContent = '0';
+  entropyEl.style.color = 'var(--muted)';
+  entropyDesc.textContent = 'Enter a password above to calculate its entropy — a measure of unpredictability.';
+  crackOnline.textContent = crackOfflineSlow.textContent =
+  crackOfflineFast.textContent = crackGpu.textContent = '—';
+
+  ['val-length','val-upper','val-digit','val-symbol'].forEach(id => {
+    document.getElementById(id).textContent = '0';
+  });
+  ['sc-length','sc-upper','sc-digit','sc-symbol'].forEach(id => {
+    document.getElementById(id).classList.remove('active');
+  });
+  ['chk-length','chk-upper','chk-lower','chk-digit','chk-symbol','chk-norepeat','chk-nosequence'].forEach(id => {
+    const el = document.getElementById(id);
+    el.classList.remove('pass','fail');
+    el.querySelector('.check-dot').textContent = '';
+  });
+
+  warnBox.innerHTML = `<div class="warn-item ok"><span class="warn-icon">🛡</span><span>Enter a password to see security warnings and alerts.</span></div>`;
+  document.getElementById('input-card').classList.remove('glowing');
+}
+</script>
+</body>
+</html>
