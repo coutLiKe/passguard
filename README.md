@@ -12,7 +12,7 @@
 
 ## 🖥️ Live Demo
 
-**[▶ Open Live Demo](https://coutLiKe.github.io/passguard)** ← replace with your GitHub username after deploying
+**[▶ Open Live Demo](https://coutLiKe.github.io/passguard)**
 
 Or download and open `index.html` directly in any browser — no install, no server needed.
 
